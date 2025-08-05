@@ -1,7 +1,9 @@
 fastapi
 websockets
-google-generativeai
-soundfile
+google-cloud-speech
 numpy
 uvicorn
+librosa
+soundfile
 python-dotenv
+google-generativeai

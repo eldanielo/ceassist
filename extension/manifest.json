@@ -7,7 +7,7 @@
     "tabCapture",
     "activeTab",
     "scripting",
-    "offscreen"  // New permission for offscreen documents
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -30,9 +30,8 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["offscreen.html"],
-      "matches": ["<all_urls>"],
-      "extension_ids": []
+      "resources": [ "offscreen.html", "transcription.html" ],
+      "matches": [ "<all_urls>" ]
     }
   ]
 }
