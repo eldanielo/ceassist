@@ -1,0 +1,7 @@
+fastapi
+websockets
+google-generativeai
+soundfile
+numpy
+uvicorn
+python-dotenv
