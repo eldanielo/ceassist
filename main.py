@@ -8,6 +8,7 @@ import librosa
 import logging
 import os
 import uuid
+import json
 from dotenv import load_dotenv
 
 # --- Environment and API Key Configuration ---
@@ -29,30 +30,19 @@ app = FastAPI()
 # --- Gemini System Prompt ---
 SYSTEM_PROMPT = """
 You are a highly advanced AI assistant for a Google Cloud Customer Engineer (CE).
-You are listening in on a live sales call between the CE and a Customer.
-Be concise, bullet points only. If there is no information to provide, do not respond.
-You purpose is to provide real-time support to the CE in three distinct ways:
+You are listening in on a live sales call. Your purpose is to provide real-time support.
+You have three tasks. For each user transcript you receive, you must choose only ONE of the following actions:
 
-1.  **Answering Customer Questions:** When the customer asks a direct question about Google Cloud services, features, pricing, or technical capabilities, provide a concise and accurate answer.
-    - Frame these answers neutrally, as if the CE is speaking.
-    - Do not start these answers with any special prefix.
+1.  **Answer a direct question:** If the customer asks a direct question, provide a concise, factual answer. Do not use any prefix.
+2.  **Provide a proactive tip:** If there is an opportunity for the CE to ask a question or position a product, provide a tip. You **MUST** start this response with the prefix `💡 CE Tip:`.
+3.  **Extract a key fact:** If a key fact is mentioned (a number, technology, person, or goal), extract it. You **MUST** start this response with the prefix `FACT:`.
 
-2.  **Proactive CE Guidance:** Throughout the conversation, provide proactive advice to the Customer Engineer to help them guide the conversation effectively.
-    - This guidance should include suggestions on what Google Cloud products to position, what discovery questions to ask, and what technical advantages to highlight.
-    - **Crucially, you must start every piece of proactive guidance with the '💡 CE Tip:' prefix.**
-
-3.  **Extracting Key Facts:** When a key fact is mentioned (e.g., a specific number, a technology name, a key person, a stated business goal or pain point), extract it.
-    - **You must start every extracted fact with the 'FACT:' prefix.**
-
-**Your Goal:** Empower the Customer Engineer to win the deal by being their all-knowing, proactive assistant.
+If you have no valuable information to provide for a given piece of transcript, you **MUST** respond with only the single word `EMPTY`.
 """
 
 def get_speech_config():
-    """Returns the Google Speech-to-Text configuration with speaker diarization."""
     diarization_config = speech.SpeakerDiarizationConfig(
-        enable_speaker_diarization=True,
-        min_speaker_count=2,
-        max_speaker_count=2,
+        enable_speaker_diarization=True, min_speaker_count=2, max_speaker_count=2
     )
     return speech.RecognitionConfig(
         encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
@@ -62,33 +52,59 @@ def get_speech_config():
     )
 
 async def audio_receiver(ws: WebSocket, queue: asyncio.Queue):
-    """Receives audio from WebSocket and puts it into a queue."""
     try:
         while True:
-            data = await ws.receive_bytes()
-            await queue.put(data)
+            await queue.put(await ws.receive_bytes())
     except WebSocketDisconnect:
-        logger.info("Client disconnected. Audio receiver is stopping.")
+        logger.info("Client disconnected. Audio receiver stopping.")
         await queue.put(None)
     except Exception as e:
         logger.error(f"Error in audio_receiver: {e}")
         await queue.put(None)
 
 async def transcription_manager(ws: WebSocket, queue: asyncio.Queue, gemini_chat):
-    """Manages the transcription stream, restarting it as needed."""
     client = speech.SpeechAsyncClient()
 
     async def send_to_gemini(transcript: str):
         logger.info(f"Sending to Gemini: {transcript}")
         message_id = str(uuid.uuid4())
+        response_type = None
+        response_stream = None
+        
         try:
-            response = await gemini_chat.send_message_async(transcript, stream=True)
-            async for chunk in response:
-                if chunk.text:
-                    logger.info(f"Received from Gemini: {chunk.text}")
-                    await ws.send_text(f"COACH:{message_id}:{chunk.text}")
+            response_stream = await gemini_chat.send_message_async(transcript, stream=True)
+            is_first_chunk = True
+            async for chunk in response_stream:
+                if not chunk.text: continue
+
+                payload = chunk.text
+                if is_first_chunk:
+                    is_first_chunk = False
+                    if "EMPTY" in payload:
+                        logger.info("Gemini returned EMPTY, skipping.")
+                        return
+
+                    if payload.strip().startswith("FACT:"):
+                        response_type = "FACT"
+                        payload = payload.replace("FACT:", "", 1).lstrip()
+                    elif payload.strip().startswith("💡 CE Tip:"):
+                        response_type = "TIP"
+                    else:
+                        response_type = "ANSWER"
+                
+                message = {
+                    "message_id": message_id,
+                    "response_type": response_type,
+                    "payload": payload,
+                }
+                await ws.send_text(json.dumps(message))
+
         except Exception as e:
             logger.error(f"Error sending to Gemini: {e}")
+        finally:
+            if response_stream:
+                await response_stream.resolve()
+
 
     while True:
         logger.info("Starting new transcription stream.")
@@ -96,8 +112,7 @@ async def transcription_manager(ws: WebSocket, queue: asyncio.Queue, gemini_chat
         async def google_request_generator():
             yield speech.StreamingRecognizeRequest(
                 streaming_config=speech.StreamingRecognitionConfig(
-                    config=get_speech_config(),
-                    interim_results=True,
+                    config=get_speech_config(), interim_results=True
                 )
             )
             while True:
@@ -118,32 +133,30 @@ async def transcription_manager(ws: WebSocket, queue: asyncio.Queue, gemini_chat
             responses = await client.streaming_recognize(requests=google_request_generator())
             async for response in responses:
                 if asyncio.get_event_loop().time() - stream_start_time > STREAM_LIMIT_SECONDS:
-                    logger.info(f"Stream limit of {STREAM_LIMIT_SECONDS}s reached. Restarting.")
+                    logger.info("Stream limit reached. Restarting.")
                     break
 
-                if not response.results: continue
-
+                if not response.results or not response.results[0].alternatives: continue
+ 
                 result = response.results[0]
-                if not result.alternatives: continue
-
                 transcript_text = result.alternatives[0].transcript
                 
                 if result.is_final:
-                    # Process final transcript with speaker labels
                     words_info = result.alternatives[0].words
-                    current_speaker_tag = 0
-                    full_transcript = ""
+                    current_speaker_tag = words_info[0].speaker_tag if words_info else 0
+                    full_transcript = f"**Speaker {current_speaker_tag}:** "
                     for word_info in words_info:
                         if word_info.speaker_tag != current_speaker_tag:
                             full_transcript += f"\n**Speaker {word_info.speaker_tag}:** "
                             current_speaker_tag = word_info.speaker_tag
                         full_transcript += word_info.word + " "
                     
-                    logger.info(f"Final transcript: {full_transcript.strip()}")
-                    await ws.send_text(f"TRANSCRIPT:{full_transcript.strip()}")
-                    await send_to_gemini(full_transcript.strip())
+                    full_transcript = full_transcript.strip()
+                    logger.info(f"Final transcript: {full_transcript}")
+                    await ws.send_text(json.dumps({"response_type": "TRANSCRIPT", "payload": full_transcript}))
+                    await send_to_gemini(full_transcript)
                 else:
-                    await ws.send_text(f"INTERIM: {transcript_text}")
+                    await ws.send_text(json.dumps({"response_type": "INTERIM", "payload": transcript_text}))
         except asyncio.CancelledError:
             logger.info("Transcription manager cancelled.")
             break
@@ -159,10 +172,10 @@ async def websocket_endpoint(websocket: WebSocket):
     logger.info("WebSocket connection established.")
 
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         chat = model.start_chat(history=[
             {'role': 'user', 'parts': [SYSTEM_PROMPT]},
-            {'role': 'model', 'parts': ["Understood. I am ready to assist. I will analyze the transcript and provide talking points for the Seller."]}
+            {'role': 'model', 'parts': ["Understood. I am ready to assist."]}
         ])
         logger.info("Gemini chat session started.")
 
@@ -172,8 +185,7 @@ async def websocket_endpoint(websocket: WebSocket):
         manager_task = asyncio.create_task(transcription_manager(websocket, audio_queue, chat))
 
         done, pending = await asyncio.wait(
-            [receiver_task, manager_task],
-            return_when=asyncio.FIRST_COMPLETED,
+            [receiver_task, manager_task], return_when=asyncio.FIRST_COMPLETED
         )
 
         for task in pending: task.cancel()
