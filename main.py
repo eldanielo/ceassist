@@ -3,6 +3,7 @@ import websockets
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from google.cloud import speech
 import google.generativeai as genai
+from google.generativeai.types import Tool
 import numpy as np
 import librosa
 import logging
@@ -27,17 +28,74 @@ STREAM_LIMIT_SECONDS = 290
 
 app = FastAPI()
 
+# --- Gemini Tool Definitions ---
+ce_assist_tool = Tool(function_declarations=[
+    {
+        "name": "extract_fact",
+        "description": "Extract a key fact from the transcript.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "fact": {
+                    "type": "string",
+                    "description": "The key fact, such as a number, technology, person, or goal. Should be keywords only."
+                }
+            },
+            "required": ["fact"]
+        }
+    },
+    {
+        "name": "provide_tip",
+        "description": "Provide a proactive tip for the Customer Engineer.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "short_tip": {
+                    "type": "string",
+                    "description": "A short, keyword-based version of the tip."
+                },
+                "long_tip": {
+                    "type": "string",
+                    "description": "A longer, more detailed version of the tip."
+                }
+            },
+            "required": ["short_tip", "long_tip"]
+        }
+    },
+    {
+        "name": "answer_question",
+        "description": "Answer a direct question from the customer.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "short_answer": {
+                    "type": "string",
+                    "description": "A short, keyword-based answer to the customer's question."
+                },
+                "long_answer": {
+                    "type": "string",
+                    "description": "A longer, more detailed answer to the customer's question."
+                }
+            },
+            "required": ["short_answer", "long_answer"]
+        }
+    }
+])
+
+
 # --- Gemini System Prompt ---
 SYSTEM_PROMPT = """
 You are a highly advanced AI assistant for a Google Cloud Customer Engineer (CE).
 You are listening in on a live sales call. Your purpose is to provide real-time support.
-You have three tasks. For each user transcript you receive, you must choose only ONE of the following actions:
+For each user transcript you receive, you must use the provided tools to respond.
 
-1.  **Answer a direct question:** If the customer asks a direct question, provide a concise, factual answer. Do not use any prefix.
-2.  **Provide a proactive tip:** If there is an opportunity for the CE to ask a question or position a product, provide a tip. You **MUST** start this response with the prefix `💡 CE Tip:`.
-3.  **Extract a key fact:** If a key fact is mentioned (a number, technology, person, or goal), extract it. You **MUST** start this response with the prefix `FACT:`.
+Your primary goal is to help the CE. Therefore, you should always look for opportunities to `provide_tip`.
 
-If you have no valuable information to provide for a given piece of transcript, you **MUST** respond with only the single word `EMPTY`.
+- `answer_question`: If the customer asks a direct question, provide both a short, keyword-based answer and a longer, more detailed answer.
+- `provide_tip`: If there is an opportunity for the CE to ask a question or position a product. This is your most important function. Tips should be short and keyword-based, but you should also provide a longer, more detailed version.
+- `extract_fact`: If a key fact is mentioned (a number, technology, person, or goal). Facts should be concise and to the point. For example, instead of "The entire infrastructure is on AWS", say "100% AWS". Instead of "Their application is built with React", say "React". facts should also usually trigger provide_tip
+
+If you have no valuable information to provide, do not call any tool.
 """
 
 def get_speech_config():
@@ -62,49 +120,58 @@ async def audio_receiver(ws: WebSocket, queue: asyncio.Queue):
         logger.error(f"Error in audio_receiver: {e}")
         await queue.put(None)
 
-async def transcription_manager(ws: WebSocket, queue: asyncio.Queue, gemini_chat):
-    client = speech.SpeechAsyncClient()
-
-    async def send_to_gemini(transcript: str):
-        logger.info(f"Sending to Gemini: {transcript}")
-        message_id = str(uuid.uuid4())
-        response_type = None
-        response_stream = None
+async def send_to_gemini(ws: WebSocket, gemini_chat, transcript: str):
+    logger.info(f"Sending to Gemini: {transcript}")
+    
+    try:
+        response = await gemini_chat.send_message_async(transcript)
         
-        try:
-            response_stream = await gemini_chat.send_message_async(transcript, stream=True)
-            is_first_chunk = True
-            async for chunk in response_stream:
-                if not chunk.text: continue
+        if not response.candidates or not response.candidates[0].content.parts:
+            logger.info("Gemini returned no response, skipping.")
+            await ws.send_text(json.dumps({"response_type": "EMPTY"}))
+            return
 
-                payload = chunk.text
-                if is_first_chunk:
-                    is_first_chunk = False
-                    if "EMPTY" in payload:
-                        logger.info("Gemini returned EMPTY, skipping.")
-                        return
-
-                    if payload.strip().startswith("FACT:"):
-                        response_type = "FACT"
-                        payload = payload.replace("FACT:", "", 1).lstrip()
-                    elif payload.strip().startswith("💡 CE Tip:"):
-                        response_type = "TIP"
-                    else:
-                        response_type = "ANSWER"
+        function_called = False
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, 'function_call') and part.function_call:
+                function_called = True
+                fc = part.function_call
                 
+                message_id = str(uuid.uuid4())
+                response_type = ""
+                payload = {}
+
+                if fc.name == "extract_fact":
+                    response_type = "FACT"
+                    payload = {"fact": fc.args['fact']}
+                elif fc.name == "provide_tip":
+                    response_type = "TIP"
+                    payload = {"short": f"💡 {fc.args['short_tip']}", "long": fc.args['long_tip']}
+                elif fc.name == "answer_question":
+                    response_type = "ANSWER"
+                    payload = {"short": fc.args['short_answer'], "long": fc.args['long_answer']}
+                else:
+                    logger.warning(f"Unknown function call: {fc.name}")
+                    continue
+
                 message = {
                     "message_id": message_id,
                     "response_type": response_type,
                     "payload": payload,
                 }
+                logger.info(f"Gemini response: {json.dumps(message)}")
                 await ws.send_text(json.dumps(message))
 
-        except Exception as e:
-            logger.error(f"Error sending to Gemini: {e}")
-        finally:
-            if response_stream:
-                await response_stream.resolve()
+        if not function_called:
+            logger.info("Gemini did not call a function.")
+            await ws.send_text(json.dumps({"response_type": "EMPTY"}))
 
+    except Exception as e:
+        logger.error(f"Error sending to Gemini: {e}")
+
+
+async def transcription_manager(ws: WebSocket, queue: asyncio.Queue, gemini_chat):
+    client = speech.SpeechAsyncClient()
 
     while True:
         logger.info("Starting new transcription stream.")
@@ -154,7 +221,7 @@ async def transcription_manager(ws: WebSocket, queue: asyncio.Queue, gemini_chat
                     full_transcript = full_transcript.strip()
                     logger.info(f"Final transcript: {full_transcript}")
                     await ws.send_text(json.dumps({"response_type": "TRANSCRIPT", "payload": full_transcript}))
-                    await send_to_gemini(full_transcript)
+                    await send_to_gemini(ws, gemini_chat, full_transcript)
                 else:
                     await ws.send_text(json.dumps({"response_type": "INTERIM", "payload": transcript_text}))
         except asyncio.CancelledError:
@@ -172,7 +239,7 @@ async def websocket_endpoint(websocket: WebSocket):
     logger.info("WebSocket connection established.")
 
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash', tools=[ce_assist_tool])
         chat = model.start_chat(history=[
             {'role': 'user', 'parts': [SYSTEM_PROMPT]},
             {'role': 'model', 'parts': ["Understood. I am ready to assist."]}
@@ -197,3 +264,26 @@ async def websocket_endpoint(websocket: WebSocket):
         logger.info("WebSocket connection closing.")
         if not websocket.client_state == websockets.protocol.State.CLOSED:
             await websocket.close()
+
+@app.websocket("/ws/test_text")
+async def websocket_test_text_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    logger.info("Test WebSocket connection established.")
+
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash', tools=[ce_assist_tool])
+        chat = model.start_chat(history=[
+            {'role': 'user', 'parts': [SYSTEM_PROMPT]},
+            {'role': 'model', 'parts': ["Understood. I am ready to assist."]}
+        ])
+        logger.info("Gemini chat session started for test endpoint.")
+
+        while True:
+            transcript = await websocket.receive_text()
+            logger.info(f"Received transcript for testing: {transcript}")
+            await send_to_gemini(websocket, chat, transcript)
+
+    except WebSocketDisconnect:
+        logger.info("Test WebSocket connection closing.")
+    except Exception as e:
+        logger.error(f"Error in test websocket handler: {e}")

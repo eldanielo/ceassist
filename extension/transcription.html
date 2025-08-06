@@ -75,6 +75,25 @@
       border-radius: 8px;
       line-height: 1.6;
     }
+    .ce-tip, .direct-answer {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .arrow {
+      border: solid #333;
+      border-width: 0 2px 2px 0;
+      display: inline-block;
+      padding: 3px;
+      transform: rotate(45deg);
+      -webkit-transform: rotate(45deg);
+      transition: transform 0.2s;
+    }
+    .arrow.expanded {
+      transform: rotate(-135deg);
+      -webkit-transform: rotate(-135deg);
+    }
     .ce-tip {
       background-color: #e8f0fe;
       border-left: 4px solid #1a73e8;
