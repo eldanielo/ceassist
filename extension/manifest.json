@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Tab Audio Transcriber",
+  "name": "CE AI Assist",
   "version": "1.0",
   "description": "Transcribe audio from a Chrome tab using Google Cloud Speech-to-Text.",
   "permissions": [

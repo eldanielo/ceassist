@@ -1,0 +1,20 @@
+INFO:     Will watch for changes in these directories: ['/home/dpfeller/ceassist']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [5877] using StatReload
+INFO:     Started server process [5879]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:59252 - "WebSocket /ws/test_text" [accepted]
+INFO:main:Test WebSocket connection established.
+INFO:main:Triage Agent chat session started for test endpoint.
+INFO:     connection open
+INFO:main:Received transcript for testing: We are running into PostgreSQL scaling limits on AWS and are exploring other options.
+INFO:main:Sending to Triage Agent: We are running into PostgreSQL scaling limits on AWS and are exploring other options.
+INFO:main:Triage Agent response: {"message_id": "487d531b-8cb4-4a03-b385-fa295f61bd62", "response_type": "FACT", "payload": "Customer is experiencing PostgreSQL scaling limits on AWS and is exploring other options."}
+INFO:main:Test WebSocket connection closing.
+INFO:     connection closed
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [5879]
+INFO:     Stopping reloader process [5877]

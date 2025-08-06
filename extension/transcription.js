@@ -1,15 +1,23 @@
 const assistantResponsesDiv = document.getElementById('assistant-responses');
 const transcriptLogDiv = document.getElementById('transcript-log');
 const interimTranscriptDiv = document.getElementById('interim-transcript');
-const factsList = document.getElementById('facts-list');
+const infrastructureFactsList = document.getElementById('infrastructure-facts-list');
+const otherFactsList = document.getElementById('other-facts-list');
 
-function createExpandableElement(id, shortText, longText, baseClass) {
+function createExpandableElement(id, shortText, longText, baseClass, question = null) {
   const newElement = document.createElement('div');
   newElement.id = id;
   newElement.className = 'message-bubble ' + baseClass;
 
   const textContainer = document.createElement('div');
   
+  if (question) {
+    const questionDiv = document.createElement('div');
+    questionDiv.style.fontWeight = 'bold';
+    questionDiv.textContent = "Q: " + question;
+    textContainer.appendChild(questionDiv);
+  }
+
   const shortTextDiv = document.createElement('div');
   shortTextDiv.textContent = shortText;
   
@@ -35,6 +43,29 @@ function createExpandableElement(id, shortText, longText, baseClass) {
   return newElement;
 }
 
+function createFactElement(id, fact, gcpService = null) {
+  const factItem = document.createElement('li');
+  factItem.id = id;
+  factItem.className = 'fact-item';
+  factItem.textContent = fact;
+
+  if (gcpService) {
+    factItem.classList.add('expandable');
+    const gcpServiceDiv = document.createElement('div');
+    gcpServiceDiv.className = 'gcp-service';
+    gcpServiceDiv.textContent = `GCP Equivalent: ${gcpService}`;
+    factItem.appendChild(gcpServiceDiv);
+
+    factItem.addEventListener('click', (event) => {
+      if (event.target !== factItem) return;
+      const isExpanded = gcpServiceDiv.style.display !== 'none';
+      gcpServiceDiv.style.display = isExpanded ? 'none' : 'block';
+    });
+  }
+
+  return factItem;
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'displayTranscript') {
     try {
@@ -58,29 +89,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const factElementId = 'gemini-fact-' + message_id;
           let existingFactElement = document.getElementById(factElementId);
           if (existingFactElement) {
-            existingFactElement.textContent += ', ' + payload.fact;
+            existingFactElement.firstChild.textContent += ', ' + payload.fact;
           } else {
-            const factItem = document.createElement('li');
-            factItem.id = factElementId;
-            factItem.className = 'fact-item';
-            factItem.textContent = payload.fact;
-            factsList.appendChild(factItem);
+            const factItem = createFactElement(factElementId, payload.fact, payload.gcp_service);
+            if (payload.category === 'infrastructure') {
+              infrastructureFactsList.appendChild(factItem);
+            } else {
+              otherFactsList.appendChild(factItem);
+            }
           }
           break;
         case 'TIP':
-        case 'ANSWER':
-          const elementId = 'gemini-' + message_id;
-          let existingElement = document.getElementById(elementId);
+          const tipElementId = 'gemini-' + message_id;
+          let existingTipElement = document.getElementById(tipElementId);
 
-          if (existingElement) {
-            const longTextDiv = existingElement.querySelector('div > div:last-child');
+          if (existingTipElement) {
+            const longTextDiv = existingTipElement.querySelector('div > div:last-child');
             longTextDiv.textContent += ' ' + payload.long;
           } else {
               const newElement = createExpandableElement(
-                elementId,
+                tipElementId,
                 payload.short,
                 payload.long,
-                response_type === 'TIP' ? 'ce-tip' : 'direct-answer'
+                'ce-tip'
+              );
+              assistantResponsesDiv.insertAdjacentElement('afterbegin', newElement);
+          }
+          break;
+        case 'ANSWER':
+          const answerElementId = 'gemini-' + message_id;
+          let existingAnswerElement = document.getElementById(answerElementId);
+
+          if (existingAnswerElement) {
+            const longTextDiv = existingAnswerElement.querySelector('div > div:last-child');
+            longTextDiv.textContent += ' ' + payload.long;
+          } else {
+              const newElement = createExpandableElement(
+                answerElementId,
+                payload.short,
+                payload.long,
+                'direct-answer',
+                payload.question
               );
               assistantResponsesDiv.insertAdjacentElement('afterbegin', newElement);
           }

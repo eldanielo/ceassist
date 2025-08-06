@@ -23,7 +23,14 @@
       color: #d93025;
       margin-top: 0;
     }
-    #facts-list {
+    .facts-container {
+      display: flex;
+      flex-direction: row;
+    }
+    .facts-category {
+      flex: 1;
+    }
+    .facts-list {
       list-style-type: none;
       padding-left: 0;
       margin: 0;
@@ -39,6 +46,16 @@
       margin-right: 10px;
       margin-bottom: 10px;
       font-size: 0.9em;
+      display: inline-block;
+    }
+    .fact-item.expandable {
+      cursor: pointer;
+    }
+    .gcp-service {
+      display: none;
+      margin-top: 5px;
+      font-style: italic;
+      color: #5f6368;
     }
     .main-container {
       display: flex;
@@ -68,6 +85,10 @@
       color: #1a73e8;
       border-bottom: 2px solid #1a73e8;
       padding-bottom: 10px;
+    }
+    h2 {
+      font-size: 1.1em;
+      color: #333;
     }
     .message-bubble {
       margin-bottom: 15px;
@@ -118,7 +139,16 @@
 <body>
   <div id="facts-panel">
     <h1>Key Facts</h1>
-    <ul id="facts-list"></ul>
+    <div class="facts-container">
+      <div class="facts-category">
+        <h2>Infrastructure</h2>
+        <ul id="infrastructure-facts-list" class="facts-list"></ul>
+      </div>
+      <div class="facts-category">
+        <h2>Other</h2>
+        <ul id="other-facts-list" class="facts-list"></ul>
+      </div>
+    </div>
   </div>
   <div class="main-container">
     <div id="assistant-panel" class="panel">

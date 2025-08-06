@@ -39,9 +39,17 @@ ce_assist_tool = Tool(function_declarations=[
                 "fact": {
                     "type": "string",
                     "description": "The key fact, such as a number, technology, person, or goal. Should be keywords only."
+                },
+                "category": {
+                    "type": "string",
+                    "description": "The category of the fact. Must be either 'infrastructure' or 'other'."
+                },
+                "gcp_service": {
+                    "type": "string",
+                    "description": "The equivalent GCP service for an infrastructure fact. Only provide if the category is 'infrastructure' and a clear equivalent exists."
                 }
             },
-            "required": ["fact"]
+            "required": ["fact", "category"]
         }
     },
     {
@@ -68,6 +76,10 @@ ce_assist_tool = Tool(function_declarations=[
         "parameters": {
             "type": "object",
             "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "A short, keyword-based summary of the customer's question."
+                },
                 "short_answer": {
                     "type": "string",
                     "description": "A short, keyword-based answer to the customer's question."
@@ -77,7 +89,7 @@ ce_assist_tool = Tool(function_declarations=[
                     "description": "A longer, more detailed answer to the customer's question."
                 }
             },
-            "required": ["short_answer", "long_answer"]
+            "required": ["question", "short_answer", "long_answer"]
         }
     }
 ])
@@ -91,9 +103,9 @@ For each user transcript you receive, you must use the provided tools to respond
 
 Your primary goal is to help the CE. Therefore, you should always look for opportunities to `provide_tip`.
 
-- `answer_question`: If the customer asks a direct question, provide both a short, keyword-based answer and a longer, more detailed answer.
+- `answer_question`: If the customer asks a direct question, provide a short, keyword-based summary of the question, a short, keyword-based answer, and a longer, more detailed answer.
 - `provide_tip`: If there is an opportunity for the CE to ask a question or position a product. This is your most important function. Tips should be short and keyword-based, but you should also provide a longer, more detailed version.
-- `extract_fact`: If a key fact is mentioned (a number, technology, person, or goal). Facts should be concise and to the point. For example, instead of "The entire infrastructure is on AWS", say "100% AWS". Instead of "Their application is built with React", say "React". facts should also usually trigger provide_tip
+- `extract_fact`: If a key fact is mentioned (a number, technology, person, or goal), categorize it as either 'infrastructure' or 'other'. If the category is 'infrastructure', provide the equivalent GCP service if one exists. Facts should be concise and to the point. For example, instead of "The entire infrastructure is on AWS", say "100% AWS". Instead of "Their application is built with React", say "React". facts should also usually trigger provide_tip
 
 If you have no valuable information to provide, do not call any tool.
 """
@@ -143,13 +155,15 @@ async def send_to_gemini(ws: WebSocket, gemini_chat, transcript: str):
 
                 if fc.name == "extract_fact":
                     response_type = "FACT"
-                    payload = {"fact": fc.args['fact']}
+                    payload = {"fact": fc.args['fact'], "category": fc.args['category']}
+                    if 'gcp_service' in fc.args:
+                        payload['gcp_service'] = fc.args['gcp_service']
                 elif fc.name == "provide_tip":
                     response_type = "TIP"
                     payload = {"short": f"💡 {fc.args['short_tip']}", "long": fc.args['long_tip']}
                 elif fc.name == "answer_question":
                     response_type = "ANSWER"
-                    payload = {"short": fc.args['short_answer'], "long": fc.args['long_answer']}
+                    payload = {"question": fc.args['question'], "short": fc.args['short_answer'], "long": fc.args['long_answer']}
                 else:
                     logger.warning(f"Unknown function call: {fc.name}")
                     continue

@@ -54,7 +54,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         websocket.onopen = () => console.log('WebSocket connected.');
         websocket.onmessage = (event) => {
           if (transcriptionTabId) {
-            chrome.tabs.sendMessage(transcriptionTabId, { action: 'displayTranscript', transcript: event.data });
+            chrome.runtime.sendMessage({ action: 'displayTranscript', transcript: event.data });
           }
         };
         websocket.onclose = () => {
