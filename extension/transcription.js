@@ -145,6 +145,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               assistantResponsesDiv.insertAdjacentElement('afterbegin', newElement);
           }
           break;
+        case 'SEARCH_RESULT':
+            const searchElementId = 'gemini-' + message_id;
+            const newElement = document.createElement('div');
+            newElement.id = searchElementId;
+            newElement.className = 'message-bubble search-result';
+            newElement.innerHTML = `<b>Search for:</b> "${payload.query}"<br><b>Results:</b> ${payload.results}`;
+            assistantResponsesDiv.insertAdjacentElement('afterbegin', newElement);
+            break;
       }
     } catch (error) {
       console.error("Failed to parse incoming message:", error);

@@ -42,7 +42,7 @@ ce_assist_tool = Tool(function_declarations=[
                 },
                 "category": {
                     "type": "string",
-                    "description": "The category of the fact. Must be either 'infrastructure' or 'other'."
+                    "description": "The category of the fact. Must be 'infrastructure' for infrastructure components (e.g., 'EC2', 'S3', 'VPC') or 'other' for all other facts."
                 },
                 "gcp_service": {
                     "type": "string",
@@ -91,6 +91,20 @@ ce_assist_tool = Tool(function_declarations=[
             },
             "required": ["question", "short_answer", "long_answer"]
         }
+    },
+    {
+        "name": "google_search",
+        "description": "Search Google for information.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query."
+                }
+            },
+            "required": ["query"]
+        }
     }
 ])
 
@@ -106,19 +120,16 @@ Your primary goal is to help the CE. Therefore, you should always look for oppor
 - `answer_question`: If the customer asks a direct question, provide a short, keyword-based summary of the question, a short, keyword-based answer, and a longer, more detailed answer.
 - `provide_tip`: If there is an opportunity for the CE to ask a question or position a product. This is your most important function. Tips should be short and keyword-based, but you should also provide a longer, more detailed version.
 - `extract_fact`: If a key fact is mentioned (a number, technology, person, or goal), categorize it as either 'infrastructure' or 'other'. If the category is 'infrastructure', provide the equivalent GCP service if one exists. Facts should be concise and to the point. For example, instead of "The entire infrastructure is on AWS", say "100% AWS". Instead of "Their application is built with React", say "React". facts should also usually trigger provide_tip
+- `google_search`: If you need to find external information to answer a question or provide a tip, use this tool.
 
 If you have no valuable information to provide, do not call any tool.
 """
 
 def get_speech_config():
-    diarization_config = speech.SpeakerDiarizationConfig(
-        enable_speaker_diarization=True, min_speaker_count=2, max_speaker_count=2
-    )
     return speech.RecognitionConfig(
         encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
         sample_rate_hertz=SPEECH_API_SAMPLE_RATE,
         language_code="en-US",
-        diarization_config=diarization_config,
     )
 
 async def audio_receiver(ws: WebSocket, queue: asyncio.Queue):
@@ -164,6 +175,10 @@ async def send_to_gemini(ws: WebSocket, gemini_chat, transcript: str):
                 elif fc.name == "answer_question":
                     response_type = "ANSWER"
                     payload = {"question": fc.args['question'], "short": fc.args['short_answer'], "long": fc.args['long_answer']}
+                elif fc.name == "google_search":
+                    response_type = "SEARCH_RESULT"
+                    # This is a placeholder for the actual search implementation
+                    payload = {"query": fc.args['query'], "results": "Search results would appear here."}
                 else:
                     logger.warning(f"Unknown function call: {fc.name}")
                     continue
@@ -223,16 +238,7 @@ async def transcription_manager(ws: WebSocket, queue: asyncio.Queue, gemini_chat
                 transcript_text = result.alternatives[0].transcript
                 
                 if result.is_final:
-                    words_info = result.alternatives[0].words
-                    current_speaker_tag = words_info[0].speaker_tag if words_info else 0
-                    full_transcript = f"**Speaker {current_speaker_tag}:** "
-                    for word_info in words_info:
-                        if word_info.speaker_tag != current_speaker_tag:
-                            full_transcript += f"\n**Speaker {word_info.speaker_tag}:** "
-                            current_speaker_tag = word_info.speaker_tag
-                        full_transcript += word_info.word + " "
-                    
-                    full_transcript = full_transcript.strip()
+                    full_transcript = result.alternatives[0].transcript.strip()
                     logger.info(f"Final transcript: {full_transcript}")
                     await ws.send_text(json.dumps({"response_type": "TRANSCRIPT", "payload": full_transcript}))
                     await send_to_gemini(ws, gemini_chat, full_transcript)
