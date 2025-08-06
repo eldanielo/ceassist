@@ -3,6 +3,14 @@ const transcriptLogDiv = document.getElementById('transcript-log');
 const interimTranscriptDiv = document.getElementById('interim-transcript');
 const infrastructureFactsList = document.getElementById('infrastructure-facts-list');
 const otherFactsList = document.getElementById('other-facts-list');
+const tipToggle = document.getElementById('tip-toggle');
+
+tipToggle.addEventListener('change', () => {
+  const tips = document.querySelectorAll('.ce-tip');
+  tips.forEach(tip => {
+    tip.style.display = tipToggle.checked ? '' : 'none';
+  });
+});
 
 function createExpandableElement(id, shortText, longText, baseClass, question = null) {
   const newElement = document.createElement('div');
@@ -113,6 +121,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 payload.long,
                 'ce-tip'
               );
+              if (!tipToggle.checked) {
+                newElement.style.display = 'none';
+              }
               assistantResponsesDiv.insertAdjacentElement('afterbegin', newElement);
           }
           break;
