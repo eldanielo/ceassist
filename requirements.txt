@@ -6,4 +6,4 @@ uvicorn
 librosa
 soundfile
 python-dotenv
-google-generativeai
+google-genai

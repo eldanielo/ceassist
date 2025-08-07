@@ -2,8 +2,8 @@ import asyncio
 import websockets
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from google.cloud import speech
-import google.generativeai as genai
-from google.generativeai.types import Tool
+import google.genai as genai
+from google.genai.types import Tool
 import numpy as np
 import librosa
 import logging
@@ -11,13 +11,15 @@ import os
 import uuid
 import json
 from dotenv import load_dotenv
+from google.genai import types
+
 
 # --- Environment and API Key Configuration ---
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY not found in .env file")
-genai.configure(api_key=GEMINI_API_KEY)
+
 
 # --- Logging and Constants ---
 logging.basicConfig(level=logging.INFO)
@@ -29,84 +31,97 @@ STREAM_LIMIT_SECONDS = 290
 app = FastAPI()
 
 # --- Gemini Tool Definitions ---
-ce_assist_tool = Tool(function_declarations=[
-    {
-        "name": "extract_fact",
-        "description": "Extract a key fact from the transcript.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "fact": {
-                    "type": "string",
-                    "description": "The key fact, such as a number, technology, person, or goal. Should be keywords only."
-                },
-                "category": {
-                    "type": "string",
-                    "description": "The category of the fact. Must be 'infrastructure' for infrastructure components (e.g., 'EC2', 'S3', 'VPC') or 'other' for all other facts."
-                },
-                "gcp_service": {
-                    "type": "string",
-                    "description": "The equivalent GCP service for an infrastructure fact. Only provide if the category is 'infrastructure' and a clear equivalent exists."
-                }
+extract_fact_function = {
+    "name": "extract_fact",
+    "description": "Extract a key fact from the transcript.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "fact": {
+                "type": "string",
+                "description": "The key fact, such as a number, technology, person, or goal. Should be keywords only."
             },
-            "required": ["fact", "category"]
-        }
-    },
-    {
-        "name": "provide_tip",
-        "description": "Provide a proactive tip for the Customer Engineer.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "short_tip": {
-                    "type": "string",
-                    "description": "A short, keyword-based version of the tip."
-                },
-                "long_tip": {
-                    "type": "string",
-                    "description": "A longer, more detailed version of the tip."
-                }
+            "category": {
+                "type": "string",
+                "description": "The category of the fact. Must be 'infrastructure' for infrastructure components (e.g., 'EC2', 'S3', 'VPC') or 'other' for all other facts."
             },
-            "required": ["short_tip", "long_tip"]
-        }
-    },
-    {
-        "name": "answer_question",
-        "description": "Answer a direct question from the customer.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "question": {
-                    "type": "string",
-                    "description": "A short, keyword-based summary of the customer's question."
-                },
-                "short_answer": {
-                    "type": "string",
-                    "description": "A short, keyword-based answer to the customer's question."
-                },
-                "long_answer": {
-                    "type": "string",
-                    "description": "A longer, more detailed answer to the customer's question."
-                }
-            },
-            "required": ["question", "short_answer", "long_answer"]
-        }
-    },
-    {
-        "name": "google_search",
-        "description": "Search Google for information.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query."
-                }
-            },
-            "required": ["query"]
-        }
+            "gcp_service": {
+                "type": "string",
+                "description": "The equivalent GCP service for an infrastructure fact. Only provide if the category is 'infrastructure' and a clear equivalent exists."
+            }
+        },
+        "required": ["fact", "category"]
     }
+}
+
+provide_tip_function = {
+    "name": "provide_tip",
+    "description": "Provide a proactive tip for the Customer Engineer.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "short_tip": {
+                "type": "string",
+                "description": "A short, keyword-based version of the tip."
+            },
+            "long_tip": {
+                "type": "string",
+                "description": "A longer, more detailed version of the tip."
+            }
+        },
+        "required": ["short_tip", "long_tip"]
+    }
+}
+
+answer_question_function = {
+    "name": "answer_question",
+    "description": "Answer a direct question from the customer.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "question": {
+                "type": "string",
+                "description": "A short, keyword-based summary of the customer's question."
+            },
+            "short_answer": {
+                "type": "string",
+                "description": "A short, keyword-based answer to the customer's question."
+            },
+            "long_answer": {
+                "type": "string",
+                "description": "A longer, more detailed answer to the customer's question."
+            }
+        },
+        "required": ["question", "short_answer", "long_answer"]
+    }
+}
+
+google_search_function = {
+    "name": "google_search",
+    "description": "Search Google for information.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "The search query."
+            }
+        },
+        "required": ["query"]
+    }
+}
+
+tools = types.Tool(function_declarations=[
+    extract_fact_function,
+    provide_tip_function,
+    answer_question_function,
+    google_search_function
 ])
+grounding_tool = types.Tool(
+    google_search=types.GoogleSearch()
+)
+
+config = types.GenerateContentConfig(tools=[tools])
 
 
 # --- Gemini System Prompt ---
@@ -115,13 +130,10 @@ You are a highly advanced AI assistant for a Google Cloud Customer Engineer (CE)
 You are listening in on a live sales call. Your purpose is to provide real-time support.
 For each user transcript you receive, you must use the provided tools to respond.
 
-Your primary goal is to help the CE. Therefore, you should always look for opportunities to `provide_tip`.
-
+Your primary goal is to help the CE. Therefore, you should always look for opportunities to `provide_tip`. 
 - `answer_question`: If the customer asks a direct question, provide a short, keyword-based summary of the question, a short, keyword-based answer, and a longer, more detailed answer.
 - `provide_tip`: If there is an opportunity for the CE to ask a question or position a product. This is your most important function. Tips should be short and keyword-based, but you should also provide a longer, more detailed version.
 - `extract_fact`: If a key fact is mentioned (a number, technology, person, or goal), categorize it as either 'infrastructure' or 'other'. If the category is 'infrastructure', provide the equivalent GCP service if one exists. Facts should be concise and to the point. For example, instead of "The entire infrastructure is on AWS", say "100% AWS". Instead of "Their application is built with React", say "React". facts should also usually trigger provide_tip
-- `google_search`: If you need to find external information to answer a question or provide a tip, use this tool.
-
 If you have no valuable information to provide, do not call any tool.
 """
 
@@ -143,11 +155,18 @@ async def audio_receiver(ws: WebSocket, queue: asyncio.Queue):
         logger.error(f"Error in audio_receiver: {e}")
         await queue.put(None)
 
-async def send_to_gemini(ws: WebSocket, gemini_chat, transcript: str):
+async def send_to_gemini(ws: WebSocket, client, chat_history, transcript: str):
     logger.info(f"Sending to Gemini: {transcript}")
     
     try:
-        response = await gemini_chat.send_message_async(transcript)
+        chat_history.append({'role': 'user', 'parts': [{'text': transcript}]})
+        
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model="gemini-2.5-flash",
+            contents=chat_history,
+            config=config,
+        )
         
         if not response.candidates or not response.candidates[0].content.parts:
             logger.info("Gemini returned no response, skipping.")
@@ -175,10 +194,6 @@ async def send_to_gemini(ws: WebSocket, gemini_chat, transcript: str):
                 elif fc.name == "answer_question":
                     response_type = "ANSWER"
                     payload = {"question": fc.args['question'], "short": fc.args['short_answer'], "long": fc.args['long_answer']}
-                elif fc.name == "google_search":
-                    response_type = "SEARCH_RESULT"
-                    # This is a placeholder for the actual search implementation
-                    payload = {"query": fc.args['query'], "results": "Search results would appear here."}
                 else:
                     logger.warning(f"Unknown function call: {fc.name}")
                     continue
@@ -190,6 +205,8 @@ async def send_to_gemini(ws: WebSocket, gemini_chat, transcript: str):
                 }
                 logger.info(f"Gemini response: {json.dumps(message)}")
                 await ws.send_text(json.dumps(message))
+        
+        chat_history.append(response.candidates[0].content)
 
         if not function_called:
             logger.info("Gemini did not call a function.")
@@ -199,8 +216,8 @@ async def send_to_gemini(ws: WebSocket, gemini_chat, transcript: str):
         logger.error(f"Error sending to Gemini: {e}")
 
 
-async def transcription_manager(ws: WebSocket, queue: asyncio.Queue, gemini_chat):
-    client = speech.SpeechAsyncClient()
+async def transcription_manager(ws: WebSocket, queue: asyncio.Queue, genai_client, chat_history):
+    speech_client = speech.SpeechAsyncClient()
 
     while True:
         logger.info("Starting new transcription stream.")
@@ -226,7 +243,7 @@ async def transcription_manager(ws: WebSocket, queue: asyncio.Queue, gemini_chat
 
         stream_start_time = asyncio.get_event_loop().time()
         try:
-            responses = await client.streaming_recognize(requests=google_request_generator())
+            responses = await speech_client.streaming_recognize(requests=google_request_generator())
             async for response in responses:
                 if asyncio.get_event_loop().time() - stream_start_time > STREAM_LIMIT_SECONDS:
                     logger.info("Stream limit reached. Restarting.")
@@ -241,7 +258,7 @@ async def transcription_manager(ws: WebSocket, queue: asyncio.Queue, gemini_chat
                     full_transcript = result.alternatives[0].transcript.strip()
                     logger.info(f"Final transcript: {full_transcript}")
                     await ws.send_text(json.dumps({"response_type": "TRANSCRIPT", "payload": full_transcript}))
-                    await send_to_gemini(ws, gemini_chat, full_transcript)
+                    await send_to_gemini(ws, genai_client, chat_history, full_transcript)
                 else:
                     await ws.send_text(json.dumps({"response_type": "INTERIM", "payload": transcript_text}))
         except asyncio.CancelledError:
@@ -259,17 +276,17 @@ async def websocket_endpoint(websocket: WebSocket):
     logger.info("WebSocket connection established.")
 
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash', tools=[ce_assist_tool])
-        chat = model.start_chat(history=[
-            {'role': 'user', 'parts': [SYSTEM_PROMPT]},
-            {'role': 'model', 'parts': ["Understood. I am ready to assist."]}
-        ])
-        logger.info("Gemini chat session started.")
+        client = genai.Client()
+        chat_history = [
+            {'role': 'user', 'parts': [{'text': SYSTEM_PROMPT}]},
+            {'role': 'model', 'parts': [{'text': "Understood. I am ready to assist."}]}
+        ]
+        logger.info("Gemini client created and history initialized.")
 
         audio_queue = asyncio.Queue()
         
         receiver_task = asyncio.create_task(audio_receiver(websocket, audio_queue))
-        manager_task = asyncio.create_task(transcription_manager(websocket, audio_queue, chat))
+        manager_task = asyncio.create_task(transcription_manager(websocket, audio_queue, client, chat_history))
 
         done, pending = await asyncio.wait(
             [receiver_task, manager_task], return_when=asyncio.FIRST_COMPLETED
@@ -291,17 +308,17 @@ async def websocket_test_text_endpoint(websocket: WebSocket):
     logger.info("Test WebSocket connection established.")
 
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash', tools=[ce_assist_tool])
-        chat = model.start_chat(history=[
-            {'role': 'user', 'parts': [SYSTEM_PROMPT]},
-            {'role': 'model', 'parts': ["Understood. I am ready to assist."]}
-        ])
-        logger.info("Gemini chat session started for test endpoint.")
+        client = genai.Client()
+        chat_history = [
+            {'role': 'user', 'parts': [{'text': SYSTEM_PROMPT}]},
+            {'role': 'model', 'parts': [{'text': "Understood. I am ready to assist."}]}
+        ]
+        logger.info("Gemini client created and history initialized for test endpoint.")
 
         while True:
             transcript = await websocket.receive_text()
             logger.info(f"Received transcript for testing: {transcript}")
-            await send_to_gemini(websocket, chat, transcript)
+            await send_to_gemini(websocket, client, chat_history, transcript)
 
     except WebSocketDisconnect:
         logger.info("Test WebSocket connection closing.")
