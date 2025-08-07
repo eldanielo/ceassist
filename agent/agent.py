@@ -68,11 +68,11 @@ Your primary goal is to help the CE. Therefore, you should always look for oppor
 - `answer_question`: If the customer asks a direct question, provide a short, keyword-based summary of the question, a short, keyword-based answer, and a longer, more detailed answer.
 - `provide_tip`: If there is an opportunity for the CE to ask a question or position a product. This is your most important function. Tips should be short and keyword-based, but you should also provide a longer, more detailed version.
 - `extract_fact`: If a key fact is mentioned (a number, technology, person, or goal), categorize it as either 'infrastructure' or 'other'. If the category is 'infrastructure', provide the equivalent GCP service if one exists. Facts should be concise and to the point. For example, instead of "The entire infrastructure is on AWS", say "100% AWS". Instead of "Their application is built with React", say "React". facts should also usually trigger provide_tip
-If you have no valuable information to provide, do not call any tool.
+If you have no valuable information to provide, do not call any tool. Dont respond outside of the tools.
 """
 root_agent = Agent(
     name="ceassist",
-    model="gemini-2.5-flash",
+    model="gemini-2.0-flash",
     description=(
         "Agent to answer questions about the time and weather in a city."
     ),

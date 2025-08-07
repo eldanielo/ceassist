@@ -7,3 +7,5 @@ librosa
 soundfile
 python-dotenv
 google-genai
+requests
+pytest
