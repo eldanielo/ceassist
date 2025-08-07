@@ -20,7 +20,7 @@ extract_fact_function = {
             },
             "category": {
                 "type": "string",
-                "description": "The category of the fact. Must be 'infrastructure' for infrastructure components (e.g., 'EC2', 'S3', 'VPC') or 'other' for all other facts."
+                "description": "The category of the fact. Must be 'infrastructure' for infrastructure components (e.g., 'EC2', 'S3', 'VPC'), 'goals' for business or technical goals, or 'other' for all other facts."
             },
             "gcp_service": {
                 "type": "string",

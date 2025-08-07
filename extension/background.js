@@ -49,7 +49,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         windowId: message.windowId
       }, (newTab) => {
         transcriptionTabId = newTab.id;
-        websocket = new WebSocket('ws://localhost:8000/ws/transcribe');
+        websocket = new WebSocket('wss://ceassist-668228315581.us-central1.run.app/ws/transcribe');
 
         websocket.onopen = () => console.log('WebSocket connected.');
         websocket.onmessage = (event) => {

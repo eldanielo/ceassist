@@ -139,6 +139,10 @@
       color: #888;
       font-style: italic;
     }
+    #transcript-log {
+      display: flex;
+      flex-direction: column-reverse;
+    }
     .toggle-container {
       display: flex;
       align-items: center;
@@ -192,6 +196,10 @@
   <div id="facts-panel">
     <h1>Key Facts</h1>
     <div class="facts-container">
+      <div class="facts-category">
+        <h2>Goals</h2>
+        <ul id="goals-facts-list" class="facts-list"></ul>
+      </div>
       <div class="facts-category">
         <h2>Infrastructure</h2>
         <ul id="infrastructure-facts-list" class="facts-list"></ul>

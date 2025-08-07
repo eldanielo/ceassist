@@ -4,7 +4,7 @@ import json
 
 async def send_transcript():
     """Connects to the WebSocket server and sends transcripts."""
-    uri = "ws://localhost:8000/ws/test_text"  # Assumes the server runs on port 8000
+    uri = "ws://localhost:8000/ws/test_text"
     try:
         async with websockets.connect(uri) as websocket:
             print("Connected to the test endpoint. Type your transcript and press Enter.")

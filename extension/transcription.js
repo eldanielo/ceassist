@@ -1,6 +1,7 @@
 const assistantResponsesDiv = document.getElementById('assistant-responses');
 const transcriptLogDiv = document.getElementById('transcript-log');
 const interimTranscriptDiv = document.getElementById('interim-transcript');
+const goalsFactsList = document.getElementById('goals-facts-list');
 const infrastructureFactsList = document.getElementById('infrastructure-facts-list');
 const otherFactsList = document.getElementById('other-facts-list');
 const tipToggle = document.getElementById('tip-toggle');
@@ -86,7 +87,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const entryDiv = document.createElement('div');
           entryDiv.className = 'transcript-entry message-bubble';
           entryDiv.innerHTML = payload.replace(/\n/g, '<br>');
-          transcriptLogDiv.insertAdjacentElement('afterbegin', entryDiv);
+          transcriptLogDiv.appendChild(entryDiv);
           break;
 
         case 'INTERIM':
@@ -102,6 +103,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const factItem = createFactElement(factElementId, payload.fact, payload.gcp_service);
             if (payload.category === 'infrastructure') {
               infrastructureFactsList.appendChild(factItem);
+            } else if (payload.category === 'goals') {
+              goalsFactsList.appendChild(factItem);
             } else {
               otherFactsList.appendChild(factItem);
             }
