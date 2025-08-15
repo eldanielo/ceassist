@@ -7,7 +7,7 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-RUN useradd -m myuser
+RUN useradd -m myuser && chown -R myuser:myuser /app
 USER myuser
 
 CMD uvicorn main:app --host 0.0.0.0 --port $PORT
