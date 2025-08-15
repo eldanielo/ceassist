@@ -1,0 +1,8 @@
+Dockerfile
+.dockerignore
+.git
+.gitignore
+.gcloudignore
+venv
+__pycache__
+google-cloud-sdk
