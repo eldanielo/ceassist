@@ -11,6 +11,5 @@ if not GEMINI_API_KEY:
 # --- Logging and Constants ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-CHROME_SAMPLE_RATE = 48000
 SPEECH_API_SAMPLE_RATE = 16000
 STREAM_LIMIT_SECONDS = 290

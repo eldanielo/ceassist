@@ -20,7 +20,7 @@ extract_fact_function = {
             },
             "category": {
                 "type": "string",
-                "description": "The category of the fact. Must be 'infrastructure' for infrastructure components (e.g., 'EC2', 'S3', 'VPC'), 'goals' for business or technical goals, or 'other' for all other facts."
+                "description": "The category of the fact. Must be 'infrastructure' for infrastructure components (e.g., 'EC2', 'S3', 'VPC'), 'goals' for business or technical goals, 'concerns' for any stated problems or challenges, or 'other' for all other facts."
             },
             "gcp_service": {
                 "type": "string",
@@ -109,8 +109,8 @@ For each user transcript you receive, you must use the provided tools to respond
 
 Your primary goal is to help the CE. Therefore, you should always look for opportunities to `provide_tip`.
 - `answer_question`: If the customer asks a direct question, provide a short, keyword-based summary of the question, a short, keyword-based answer, and a longer, more detailed answer.
-- `provide_tip`: If there is an opportunity for the CE to ask a question or position a product. This is your most important function. Tips should be short and keyword-based, but you should also provide a longer, more detailed version.
-- `extract_fact`: If a key fact is mentioned (a number, technology, person, or goal), categorize it as either 'infrastructure' or 'other'. If the category is 'infrastructure', provide the equivalent GCP service if one exists. Facts should be concise and to the point. For example, instead of "The entire infrastructure is on AWS", say "100% AWS". Instead of "Their application is built with React", say "React". facts should also usually trigger provide_tip
+- `provide_tip`:  Identify a key customer statement and suggest a specific question or topic the CE should raise. The tip should be short, actionable, and keyword-based. For example: "Customer mentioned X, ask about Y. also include a longer version: Provide a detailed, comprehensive response that expands on the tip. This version should not just suggest a topic but should actually explain the relevant concepts and how they apply. The goal is to give the CE all the necessary information to talk about the topic confidently and knowledgably. For example, if the tip suggests talking about Google Cloud's AI/ML portfolio, the longer version should explain what that portfolio includes (e.g., Vertex AI, specific APIs) and provide concrete examples of how these tools can embed intelligence in a customer's products and processes, linking to whats been said before. Do not repeat information from the short tip in the long tip. Start with the specific questions first meant be read verbatim, seperated by newline followed by the explaination
+- `extract_fact`: If a key fact is mentioned (a number, technology, pethrson, or goal), categorize it as either 'infrastructure' or 'other'. If the category is 'infrastructure', provide the equivalent GCP service if one exists. Facts should be concise and to the point. For example, instead of "The entire infrastructure is on AWS", say "100% AWS". Instead of "Their application is built with React", say "React". facts should also usually trigger provide_tip
 If you have no valuable information to provide, do not call any tool.
 """
 
@@ -129,7 +129,7 @@ async def send_to_gemini(ws: WebSocket, client, chat_history, transcript: str):
 
         if not response.candidates or not response.candidates[0].content.parts:
             logger.info("Gemini returned no response, skipping.")
-            await ws.send_text(json.dumps({"response_type": "EMPTY"}))
+            await ws.send_text(json.dumps({"response_type": "STATUS", "payload": "Gemini returned no response."}))
             return
 
         function_called = False
@@ -169,7 +169,7 @@ async def send_to_gemini(ws: WebSocket, client, chat_history, transcript: str):
 
         if not function_called:
             logger.info("Gemini did not call a function.")
-            await ws.send_text(json.dumps({"response_type": "EMPTY"}))
+            await ws.send_text(json.dumps({"response_type": "STATUS", "payload": "Gemini returned no response."}))
 
     except Exception as e:
         logger.error(f"Error sending to Gemini: {e}")

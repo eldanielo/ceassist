@@ -6,6 +6,17 @@ __pycache__/
 
 # Virtual Environment
 .venv/
+venv/
 
 # Environment variables
 .env
+
+# Google Cloud SDK
+google-cloud-sdk/
+google-cloud-cli-linux-x86_64.tar.gz
+
+# Docker
+Dockerfile
+
+# Logs
+server.log

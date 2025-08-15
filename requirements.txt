@@ -3,8 +3,6 @@ websockets
 google-cloud-speech
 numpy
 uvicorn
-librosa
-soundfile
 python-dotenv
 google-genai
 requests

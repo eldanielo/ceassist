@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CE Assistant</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        :root {
+            --bubble-infra-bg: rgba(60, 120, 240, 0.1);
+            --bubble-goals-bg: rgba(60, 200, 120, 0.1);
+            --bubble-concerns-bg: rgba(255, 159, 64, 0.15);
+            --bubble-other-bg: rgba(150, 100, 220, 0.1);
+            --bubble-tip-bg: rgba(255, 193, 7, 0.15);
+            --bubble-answer-bg: rgba(255, 82, 82, 0.1);
+            --bubble-transcript-bg: #f1f1f1;
+        }
+        body {
+            padding: 2rem;
+            background-color: var(--main-background-color, #f7f7f7);
+        }
+        main.container {
+            max-width: none;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+        .grid.transcript-hidden {
+            grid-template-columns: 1fr;
+        }
+        .left-column {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        .card {
+            border: none;
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .card h3 {
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+        }
+        #transcript-card {
+            position: sticky;
+            top: 2rem;
+            height: calc(100vh - 4rem);
+            display: flex;
+            flex-direction: column;
+        }
+        #transcript-card.hidden {
+            display: none;
+        }
+        #transcript {
+            flex-grow: 1;
+            overflow-y: auto;
+            font-family: monospace;
+            padding-right: 1rem; /* For scrollbar */
+        }
+        #transcript p {
+            background-color: var(--bubble-transcript-bg);
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        #transcript p.interim {
+            opacity: 0.6;
+        }
+        .buttons {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .facts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .facts-container ul {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            list-style: none;
+            padding: 0;
+        }
+        .facts-container li {
+            width: auto;
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.875rem;
+        }
+        #tips-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        #tips-list li {
+            padding: 1rem 1.25rem;
+            border-radius: 0.75rem;
+            cursor: pointer;
+        }
+        .long-version {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(0,0,0,0.1);
+        }
+        .hidden {
+            display: none;
+        }
+        .bubble-infra { background-color: var(--bubble-infra-bg); }
+        .bubble-goals { background-color: var(--bubble-goals-bg); }
+        .bubble-concerns { background-color: var(--bubble-concerns-bg); }
+        .bubble-other { background-color: var(--bubble-other-bg); }
+        .bubble-tip { background-color: var(--bubble-tip-bg); }
+        .bubble-answer { background-color: var(--bubble-answer-bg); }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <header>
+            <h1>CE Assistant</h1>
+            <div class="buttons">
+                <button id="recordTabButton">Record from Tab</button>
+                <button id="toggleTranscriptButton">Show Transcript</button>
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="left-column">
+                <div id="key-facts-card" class="card">
+                    <h3>Key Facts</h3>
+                    <div class="facts-container">
+                        <div>
+                            <h4>Infrastructure</h4>
+                            <ul id="facts-infrastructure"></ul>
+                        </div>
+                        <div>
+                            <h4>Goals</h4>
+                            <ul id="facts-goals"></ul>
+                        </div>
+                        <div>
+                            <h4>Concerns</h4>
+                            <ul id="facts-concerns"></ul>
+                        </div>
+                        <div>
+                            <h4>Other</h4>
+                            <ul id="facts-other"></ul>
+                        </div>
+                    </div>
+                </div>
+                <div id="tips-card" class="card">
+                    <h3>Proactive Tips & Answers</h3>
+                    <ul id="tips-list"></ul>
+                </div>
+            </div>
+            <div id="transcript-card" class="card">
+                <h3>Live Transcript</h3>
+                <div id="transcript"></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const recordTabButton = document.getElementById('recordTabButton');
+        const toggleTranscriptButton = document.getElementById('toggleTranscriptButton');
+        const transcriptCard = document.getElementById('transcript-card');
+        const grid = document.querySelector('.grid');
+        const transcriptDiv = document.getElementById('transcript');
+        const tipsList = document.getElementById('tips-list');
+        const factsInfrastructureList = document.getElementById('facts-infrastructure');
+        const factsGoalsList = document.getElementById('facts-goals');
+        const factsConcernsList = document.getElementById('facts-concerns');
+        const factsOtherList = document.getElementById('facts-other');
+
+        let websocket;
+        let audioContext;
+        let processor;
+        let source;
+        let stream;
+
+        let isRecording = false;
+
+        window.onload = () => {
+            if (!navigator.mediaDevices) {
+                alert("ERROR: MediaDevices API not available. Please use a modern browser on a secure page (https or localhost).");
+                recordTabButton.disabled = true;
+            }
+            // Hide transcript by default
+            transcriptCard.classList.add('hidden');
+            grid.classList.add('transcript-hidden');
+        };
+
+        recordTabButton.addEventListener('click', () => {
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        });
+
+        toggleTranscriptButton.addEventListener('click', () => {
+            const isHidden = transcriptCard.classList.toggle('hidden');
+            grid.classList.toggle('transcript-hidden', isHidden);
+            toggleTranscriptButton.textContent = isHidden ? 'Show Transcript' : 'Hide Transcript';
+        });
+
+        async function startRecording() {
+            try {
+                stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                recordTabButton.textContent = 'Stop Recording';
+                isRecording = true;
+
+                audioContext = new AudioContext({ sampleRate: 16000 });
+                await audioContext.audioWorklet.addModule('audio-processor.js');
+                processor = new AudioWorkletNode(audioContext, 'audio-processor');
+                source = audioContext.createMediaStreamSource(stream);
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+
+                websocket = new WebSocket(`ws://${window.location.host}/ws/transcribe`);
+
+                websocket.onopen = () => console.log('WebSocket connection established.');
+                websocket.onclose = () => {
+                    console.log('WebSocket connection closed.');
+                    stopRecording();
+                };
+                websocket.onerror = (error) => console.error(`WebSocket error: ${error}`);
+                websocket.onmessage = (event) => handleWebSocketMessage(event.data);
+
+                processor.port.onmessage = (event) => {
+                    if (websocket.readyState === WebSocket.OPEN) {
+                        websocket.send(event.data);
+                    }
+                };
+                
+                stream.getTracks().forEach(track => {
+                    track.onended = () => stopRecording();
+                });
+            } catch (error) {
+                console.error(`Error starting recording: ${error}`);
+                alert(`Error starting recording: ${error.name}`);
+            }
+        }
+
+        function stopRecording() {
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            if (websocket && websocket.readyState === WebSocket.OPEN) websocket.close();
+            if (audioContext) audioContext.close();
+
+            isRecording = false;
+            recordTabButton.textContent = 'Record from Tab';
+            recordTabButton.disabled = false;
+        }
+
+        function handleWebSocketMessage(message) {
+            const data = JSON.parse(message);
+            switch (data.response_type) {
+                case 'INTERIM':
+                    let interimEl = transcriptDiv.querySelector('.interim');
+                    if (!interimEl) {
+                        interimEl = document.createElement('p');
+                        interimEl.className = 'interim';
+                        transcriptDiv.prepend(interimEl);
+                    }
+                    interimEl.textContent = data.payload;
+                    break;
+                case 'TRANSCRIPT':
+                    let existingInterim = transcriptDiv.querySelector('.interim');
+                    if (existingInterim) {
+                        existingInterim.textContent = data.payload;
+                        existingInterim.classList.remove('interim');
+                    } else {
+                        const finalEl = document.createElement('p');
+                        finalEl.textContent = data.payload;
+                        transcriptDiv.prepend(finalEl);
+                    }
+                    break;
+                case 'FACT':
+                    const factItem = document.createElement('li');
+                    factItem.innerHTML = `<b>${data.payload.fact}</b> ${data.payload.gcp_service ? `-> <i>${data.payload.gcp_service}</i>` : ''}`;
+                    
+                    if (data.payload.category === 'infrastructure') {
+                        factItem.className = 'bubble-infra';
+                        factsInfrastructureList.appendChild(factItem);
+                    } else if (data.payload.category === 'goals') {
+                        factItem.className = 'bubble-goals';
+                        factsGoalsList.appendChild(factItem);
+                    } else if (data.payload.category === 'concerns') {
+                        factItem.className = 'bubble-concerns';
+                        factsConcernsList.appendChild(factItem);
+                    } else {
+                        factItem.className = 'bubble-other';
+                        factsOtherList.appendChild(factItem);
+                    }
+                    break;
+                case 'TIP':
+                case 'ANSWER':
+                    const item = document.createElement('li');
+                    const shortText = data.response_type === 'TIP' ? `<b>${data.payload.short}</b>` : `<b>Q: ${data.payload.question}</b>`;
+                    const longText = data.payload.long;
+
+                    item.className = data.response_type === 'TIP' ? 'bubble-tip' : 'bubble-answer';
+                    item.innerHTML = `${shortText}<div class="long-version hidden">${longText}</div>`;
+                    
+                    item.addEventListener('click', () => {
+                        const longVersion = item.querySelector('.long-version');
+                        longVersion.classList.toggle('hidden');
+                    });
+
+                    tipsList.prepend(item);
+                    break;
+            }
+        }
+    </script>
+</body>
+</html>
