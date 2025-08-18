@@ -226,7 +226,8 @@
                 source.connect(processor);
                 processor.connect(audioContext.destination);
 
-                websocket = new WebSocket(`ws://${window.location.host}/ws/transcribe`);
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                websocket = new WebSocket(`${protocol}//${window.location.host}/ws/transcribe`);
 
                 websocket.onopen = () => console.log('WebSocket connection established.');
                 websocket.onclose = () => {
