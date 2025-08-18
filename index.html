@@ -186,6 +186,9 @@
         .long-version h3:first-child {
             margin-top: 0;
         }
+        .gcp-service.hidden {
+            display: none;
+        }
         .hidden {
             display: none;
         }
@@ -403,11 +406,21 @@
                     break;
                 case 'FACT':
                     const factItem = document.createElement('li');
-                    factItem.innerHTML = `<b>${data.payload.fact}</b> ${data.payload.gcp_service ? `-> <i>${data.payload.gcp_service}</i>` : ''}`;
+                    let gcpServiceHTML = '';
+                    if (data.payload.gcp_service) {
+                        gcpServiceHTML = ` <span class="gcp-service hidden">-> <i>${data.payload.gcp_service}</i></span>`;
+                    }
+                    factItem.innerHTML = `<b>${data.payload.fact}</b>${gcpServiceHTML}`;
                     
                     if (data.payload.category === 'infrastructure') {
                         factItem.className = 'bubble-infra';
                         factsInfrastructureList.appendChild(factItem);
+                        if (data.payload.gcp_service) {
+                            factItem.style.cursor = 'pointer';
+                            factItem.addEventListener('click', () => {
+                                factItem.querySelector('.gcp-service').classList.toggle('hidden');
+                            });
+                        }
                     } else if (data.payload.category === 'goals') {
                         factItem.className = 'bubble-goals';
                         factsGoalsList.appendChild(factItem);
