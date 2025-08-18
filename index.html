@@ -160,6 +160,32 @@
             font-size: 0.875rem;
             line-height: 1.6;
         }
+        .long-version p {
+            margin-bottom: 0.75rem;
+        }
+        .long-version ul {
+            list-style-type: disc;
+            padding-left: 1.25rem;
+            margin-bottom: 0.75rem;
+        }
+        .long-version li {
+            margin-bottom: 0.25rem;
+            padding: 0;
+            background-color: transparent;
+        }
+        .long-version strong {
+            font-weight: 600;
+        }
+        .long-version h3 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--heading-color);
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .long-version h3:first-child {
+            margin-top: 0;
+        }
         .hidden {
             display: none;
         }
@@ -237,6 +263,12 @@
 
         let isRecording = false;
 
+        const MOCK_TRANSCRIPTS = [
+            "We are running into scale limits of postgressql on aws",
+            "yes we use rds",
+            "yes both OLAP and OLTP"
+        ];
+
         window.onload = () => {
             if (!navigator.mediaDevices) {
                 alert("ERROR: MediaDevices API not available. Please use a modern browser on a secure page (https or localhost).");
@@ -260,6 +292,42 @@
             grid.classList.toggle('transcript-hidden', isHidden);
             toggleTranscriptButton.textContent = isHidden ? 'Show Transcript' : 'Hide Transcript';
         });
+
+        async function runUITest() {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                alert("A connection is already open. Please refresh the page.");
+                return;
+            }
+            
+            console.log("Starting UI test with mock data...");
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            websocket = new WebSocket(`${protocol}//${window.location.host}/ws/test_text`);
+
+            websocket.onopen = async () => {
+                console.log('Test WebSocket connection established.');
+
+                for (const transcript of MOCK_TRANSCRIPTS) {
+                    const p = document.createElement('p');
+                    p.textContent = transcript;
+                    transcriptDiv.prepend(p);
+
+                    console.log(`Sending: ${transcript}`);
+                    websocket.send(transcript);
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // 2-second delay
+                }
+                
+                console.log("Test finished.");
+            };
+
+            websocket.onclose = () => {
+                console.log('Test WebSocket connection closed.');
+            };
+            websocket.onerror = (error) => console.error(`WebSocket error: ${error}`);
+            websocket.onmessage = (event) => {
+                console.log("Received:", JSON.parse(event.data));
+                handleWebSocketMessage(event.data);
+            };
+        }
 
         async function startRecording() {
             try {
