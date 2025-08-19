@@ -212,6 +212,14 @@
 
         <div class="grid">
             <div class="left-column">
+                <div id="how-to-use-card" class="card">
+                    <h3>How to Use</h3>
+                    <ol>
+                        <li>Click the <strong>Record from Tab</strong> button above.</li>
+                        <li>In the pop-up, select the browser tab with your Google Meet call. Make sure to enable tab audio sharing.</li>
+                        <li>Switch back to this CE Assistant tab to see the live analysis.</li>
+                    </ol>
+                </div>
                 <div id="key-facts-card" class="card">
                     <h3>Key Facts</h3>
                     <div class="facts-container">
@@ -243,6 +251,9 @@
                 <div id="transcript"></div>
             </div>
         </div>
+    <footer>
+            <small>Gemini may produce inaccurate information, so please double-check its responses.</small>
+        </footer>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -334,6 +345,7 @@
 
         async function startRecording() {
             try {
+                document.getElementById('how-to-use-card').classList.add('hidden');
                 stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
                 recordTabButton.textContent = 'Stop Recording';
                 isRecording = true;
@@ -375,6 +387,8 @@
             if (stream) stream.getTracks().forEach(track => track.stop());
             if (websocket && websocket.readyState === WebSocket.OPEN) websocket.close();
             if (audioContext) audioContext.close();
+
+            document.getElementById('how-to-use-card').classList.remove('hidden');
 
             isRecording = false;
             recordTabButton.textContent = 'Record from Tab';
