@@ -198,10 +198,22 @@
         .bubble-other { background-color: var(--bubble-other-bg); }
         .bubble-tip { background-color: var(--bubble-tip-bg); }
         .bubble-answer { background-color: var(--bubble-answer-bg); }
+
+        footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: var(--background-color);
+            padding: 0.5rem 1.5rem;
+            text-align: center;
+            border-top: 1px solid var(--border-color);
+            font-size: 0.8rem;
+        }
     </style>
 </head>
 <body>
-    <main class="container">
+    <main class="container" style="padding-bottom: 5rem;">
         <header>
             <h1>CE Assistant</h1>
             <div class="buttons">
@@ -215,12 +227,13 @@
                 <div id="how-to-use-card" class="card">
                     <h3>How to Use</h3>
                     <ol>
-                        <li>Click the <strong>Record from Tab</strong> button above.</li>
+                        <li>Click the Record from Tab button above.</li>
                         <li>In the pop-up, select the browser tab with your Google Meet call. Make sure to enable tab audio sharing.</li>
+                        <li>Enable Gemini transcription in Google Meet. This informs the customer that the call is being transcribed.</li>
                         <li>Switch back to this CE Assistant tab to see the live analysis.</li>
                     </ol>
                 </div>
-                <div id="key-facts-card" class="card">
+                <div id="key-facts-card" class="card hidden">
                     <h3>Key Facts</h3>
                     <div class="facts-container">
                         <div>
@@ -241,7 +254,7 @@
                         </div>
                     </div>
                 </div>
-                <div id="tips-card" class="card">
+                <div id="tips-card" class="card hidden">
                     <h3>Proactive Tips & Answers</h3>
                     <ul id="tips-list"></ul>
                 </div>
@@ -346,6 +359,8 @@
         async function startRecording() {
             try {
                 document.getElementById('how-to-use-card').classList.add('hidden');
+                document.getElementById('key-facts-card').classList.remove('hidden');
+                document.getElementById('tips-card').classList.remove('hidden');
                 stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
                 recordTabButton.textContent = 'Stop Recording';
                 isRecording = true;
@@ -389,6 +404,8 @@
             if (audioContext) audioContext.close();
 
             document.getElementById('how-to-use-card').classList.remove('hidden');
+            document.getElementById('key-facts-card').classList.add('hidden');
+            document.getElementById('tips-card').classList.add('hidden');
 
             isRecording = false;
             recordTabButton.textContent = 'Record from Tab';
