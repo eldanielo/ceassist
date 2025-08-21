@@ -396,6 +396,69 @@
             if (parts.length === 2) return parts.pop().split(';').shift();
         }
 
+        async function replay(file_uri) {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                alert("A connection is already open. Please refresh the page.");
+                return;
+            }
+
+            try {
+                const response = await fetch('/replay', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_uri })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to fetch conversation');
+                }
+
+                const conversation = await response.json();
+                const transcripts = conversation.transcript;
+
+                document.getElementById('how-to-use-card').classList.add('hidden');
+                document.getElementById('key-facts-card').classList.remove('hidden');
+                document.getElementById('tips-card').classList.remove('hidden');
+
+                console.log("Starting conversation replay...");
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const token = getCookie('token');
+                if (!token) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+                websocket = new WebSocket(`${protocol}//${window.location.host}/ws/test_text?token=${token}`);
+
+                websocket.onopen = async () => {
+                    console.log('Replay WebSocket connection established.');
+
+                    for (const transcript of transcripts) {
+                        const p = document.createElement('p');
+                        p.textContent = transcript;
+                        transcriptDiv.prepend(p);
+
+                        console.log(`Sending: ${transcript}`);
+                        websocket.send(transcript);
+                        await new Promise(resolve => setTimeout(resolve, 2000)); // 2-second delay
+                    }
+                    
+                    console.log("Replay finished.");
+                };
+
+                websocket.onclose = () => console.log('Replay WebSocket connection closed.');
+                websocket.onerror = (error) => console.error(`WebSocket error: ${error}`);
+                websocket.onmessage = (event) => {
+                    console.log("Received:", JSON.parse(event.data));
+                    handleWebSocketMessage(event.data);
+                };
+
+            } catch (error) {
+                console.error('Error replaying conversation:', error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+
         async function runUITest() {
             if (websocket && websocket.readyState === WebSocket.OPEN) {
                 alert("A connection is already open. Please refresh the page.");

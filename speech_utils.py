@@ -12,7 +12,7 @@ def get_speech_config():
         language_code="en-US",
     )
 
-async def transcription_manager(ws, queue, genai_client, chat_history):
+async def transcription_manager(ws, queue, genai_client, chat_history, full_transcript):
     speech_client = speech.SpeechAsyncClient()
 
     async def google_request_generator():
@@ -44,10 +44,11 @@ async def transcription_manager(ws, queue, genai_client, chat_history):
             transcript_text = result.alternatives[0].transcript
 
             if result.is_final:
-                full_transcript = result.alternatives[0].transcript.strip()
-                if full_transcript:
-                    await ws.send_text(json.dumps({"response_type": "TRANSCRIPT", "payload": full_transcript}))
-                    await send_to_gemini(ws, genai_client, chat_history, full_transcript)
+                transcript = result.alternatives[0].transcript.strip()
+                if transcript:
+                    full_transcript.append(transcript)
+                    await ws.send_text(json.dumps({"response_type": "TRANSCRIPT", "payload": transcript}))
+                    await send_to_gemini(ws, genai_client, chat_history, transcript)
             else:
                 if transcript_text:
                     await ws.send_text(json.dumps({"response_type": "INTERIM", "payload": transcript_text}))

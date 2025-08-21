@@ -1,16 +1,17 @@
 import os
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from auth import verify_token
 from websocket_handlers import websocket_transcribe_endpoint, websocket_test_text_endpoint
+from gcs_utils import download_conversation
 
 app = FastAPI()
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if request.url.path in ["/login.html", "/docs", "/openapi.json", "/firebase-config"] or request.url.path.startswith("/ws"):
+        if request.url.path in ["/login.html", "/docs", "/openapi.json", "/firebase-config", "/replay"] or request.url.path.startswith("/ws"):
             return await call_next(request)
 
         token = request.cookies.get("token")
@@ -36,6 +37,19 @@ async def get_firebase_config():
         "messagingSenderId": "1029284952383",
         "appId": "1:1029284952383:web:1a2b3c4d5e6f7g8h9i0j"
     })
+
+@app.post("/replay")
+async def replay_conversation(request: Request):
+    data = await request.json()
+    file_uri = data.get("file_uri")
+    if not file_uri:
+        raise HTTPException(status_code=400, detail="file_uri is required")
+    
+    conversation_data = download_conversation(file_uri)
+    if not conversation_data:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+        
+    return JSONResponse(content=conversation_data)
 
 app.add_api_websocket_route("/ws/transcribe", websocket_transcribe_endpoint)
 app.add_api_websocket_route("/ws/test_text", websocket_test_text_endpoint)
