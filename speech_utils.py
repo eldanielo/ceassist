@@ -15,48 +15,45 @@ def get_speech_config():
 async def transcription_manager(ws, queue, genai_client, chat_history):
     speech_client = speech.SpeechAsyncClient()
 
-    while True:
-        logger.info("Starting new transcription stream.")
-        
-        async def google_request_generator():
-            yield speech.StreamingRecognizeRequest(
-                streaming_config=speech.StreamingRecognitionConfig(
-                    config=get_speech_config(), interim_results=True
-                )
+    async def google_request_generator():
+        yield speech.StreamingRecognizeRequest(
+            streaming_config=speech.StreamingRecognitionConfig(
+                config=get_speech_config(), interim_results=True
             )
-            while True:
-                data = await queue.get()
-                if data is None: break
-                
-                yield speech.StreamingRecognizeRequest(audio_content=data)
-                queue.task_done()
+        )
+        while True:
+            data = await queue.get()
+            if data is None:
+                break
+            yield speech.StreamingRecognizeRequest(audio_content=data)
+            queue.task_done()
 
-        stream_start_time = asyncio.get_event_loop().time()
-        try:
-            responses = await speech_client.streaming_recognize(requests=google_request_generator())
-            async for response in responses:
-                if asyncio.get_event_loop().time() - stream_start_time > STREAM_LIMIT_SECONDS:
-                    logger.info("Stream limit reached. Restarting.")
-                    break
+    stream_start_time = asyncio.get_event_loop().time()
+    try:
+        responses = await speech_client.streaming_recognize(requests=google_request_generator())
+        async for response in responses:
+            if asyncio.get_event_loop().time() - stream_start_time > STREAM_LIMIT_SECONDS:
+                logger.info("Stream limit reached. Sending restart message.")
+                await ws.send_text(json.dumps({"response_type": "RESTART"}))
+                break
 
-                if not response.results or not response.results[0].alternatives: continue
- 
-                result = response.results[0]
-                transcript_text = result.alternatives[0].transcript
-                
-                if result.is_final:
-                    full_transcript = result.alternatives[0].transcript.strip()
-                    if full_transcript:
-                        await ws.send_text(json.dumps({"response_type": "TRANSCRIPT", "payload": full_transcript}))
-                        await send_to_gemini(ws, genai_client, chat_history, full_transcript)
-                else:
-                    if transcript_text:
-                        await ws.send_text(json.dumps({"response_type": "INTERIM", "payload": transcript_text}))
-        except asyncio.CancelledError:
-            logger.info("Transcription manager cancelled.")
-            break
-        except Exception as e:
-            logger.error(f"Error during transcription processing: {e}")
-            break
+            if not response.results or not response.results[0].alternatives:
+                continue
 
-    logger.info("Transcription manager finished.")
+            result = response.results[0]
+            transcript_text = result.alternatives[0].transcript
+
+            if result.is_final:
+                full_transcript = result.alternatives[0].transcript.strip()
+                if full_transcript:
+                    await ws.send_text(json.dumps({"response_type": "TRANSCRIPT", "payload": full_transcript}))
+                    await send_to_gemini(ws, genai_client, chat_history, full_transcript)
+            else:
+                if transcript_text:
+                    await ws.send_text(json.dumps({"response_type": "INTERIM", "payload": transcript_text}))
+    except asyncio.CancelledError:
+        logger.info("Transcription manager cancelled.")
+    except Exception as e:
+        logger.error(f"Error during transcription processing: {e}")
+    finally:
+        logger.info("Transcription manager finished.")

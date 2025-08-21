@@ -280,38 +280,33 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyAwoAnyfOvw2F2t0WfgQ0HGRIkdzcztqlA",
-            authDomain: "mineral-concord-394714.firebaseapp.com",
-            projectId: "mineral-concord-394714",
-            storageBucket: "mineral-concord-394714.appspot.com",
-            messagingSenderId: "1029284952383",
-            appId: "1:1029284952383:web:1a2b3c4d5e6f7g8h9i0j"
-        };
+        fetch('/firebase-config')
+            .then(response => response.json())
+            .then(firebaseConfig => {
+                // Initialize Firebase
+                firebase.initializeApp(firebaseConfig);
+                const auth = firebase.auth();
 
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-
-        auth.onAuthStateChanged(user => {
-            if (user) {
-                // User is signed in.
-                document.getElementById('user-email').textContent = user.email;
-                user.getIdToken().then(token => {
-                    document.cookie = `token=${token};path=/`;
+                auth.onAuthStateChanged(user => {
+                    if (user) {
+                        // User is signed in.
+                        document.getElementById('user-email').textContent = user.email;
+                        user.getIdToken().then(token => {
+                            document.cookie = `token=${token};path=/`;
+                        });
+                    } else {
+                        // No user is signed in.
+                        window.location.href = '/login.html';
+                    }
                 });
-            } else {
-                // No user is signed in.
-                window.location.href = '/login.html';
-            }
-        });
 
-        document.getElementById('logoutButton').addEventListener('click', () => {
-            auth.signOut().then(() => {
-                document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                window.location.href = '/login.html';
+                document.getElementById('logoutButton').addEventListener('click', () => {
+                    auth.signOut().then(() => {
+                        document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                        window.location.href = '/login.html';
+                    });
+                });
             });
-        });
 
         const recordTabButton = document.getElementById('recordTabButton');
         const toggleTranscriptButton = document.getElementById('toggleTranscriptButton');
@@ -473,6 +468,11 @@
         function handleWebSocketMessage(message) {
             const data = JSON.parse(message);
             switch (data.response_type) {
+                case 'RESTART':
+                    console.log("Received RESTART message. Restarting recording...");
+                    stopRecording();
+                    startRecording();
+                    break;
                 case 'INTERIM':
                     let interimEl = transcriptDiv.querySelector('.interim');
                     if (!interimEl) {
