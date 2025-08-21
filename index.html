@@ -72,6 +72,19 @@
         }
         .card h3 {
             margin-top: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .toggle-icon {
+            cursor: pointer;
+            width: 1.5rem;
+            height: 1.5rem;
+            color: var(--text-color);
+            transition: transform 0.2s;
+        }
+        .toggle-icon.rotated {
+            transform: rotate(180deg);
         }
         #transcript-card {
             position: sticky;
@@ -135,6 +148,7 @@
             border-radius: 9999px;
             font-size: 0.8125rem;
             font-weight: 500;
+            list-style-type: none;
         }
         #tips-list {
             list-style: none;
@@ -144,11 +158,18 @@
             flex-direction: column;
             gap: 0.75rem;
         }
+        .tip-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
         #tips-list li {
             padding: 1rem 1.25rem;
             border-radius: 0.5rem;
             cursor: pointer;
             transition: transform 0.2s;
+            list-style-type: none;
         }
         #tips-list li:hover {
             transform: translateY(-2px);
@@ -241,7 +262,12 @@
                     </ol>
                 </div>
                 <div id="key-facts-card" class="card hidden">
-                    <h3>Key Facts</h3>
+                    <h3>
+                        Key Facts
+                        <svg id="toggleFactsButton" class="toggle-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                        </svg>
+                    </h3>
                     <div class="facts-container">
                         <div>
                             <h4>Infrastructure</h4>
@@ -318,6 +344,13 @@
         const factsGoalsList = document.getElementById('facts-goals');
         const factsConcernsList = document.getElementById('facts-concerns');
         const factsOtherList = document.getElementById('facts-other');
+        const toggleFactsButton = document.getElementById('toggleFactsButton');
+        const factsContainer = document.querySelector('.facts-container');
+
+        toggleFactsButton.addEventListener('click', () => {
+            factsContainer.classList.toggle('hidden');
+            toggleFactsButton.classList.toggle('rotated');
+        });
 
         let websocket;
         let audioContext;
@@ -369,6 +402,10 @@
                 return;
             }
             
+            document.getElementById('how-to-use-card').classList.add('hidden');
+            document.getElementById('key-facts-card').classList.remove('hidden');
+            document.getElementById('tips-card').classList.remove('hidden');
+
             console.log("Starting UI test with mock data...");
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const token = getCookie('token');
@@ -524,19 +561,35 @@
                 case 'TIP':
                 case 'ANSWER':
                     const item = document.createElement('li');
-                    const shortText = data.response_type === 'TIP' ? `<b>${data.payload.short}</b>` : `<b>Q: ${data.payload.question}</b>`;
-                    const longText = data.payload.long;
-
                     item.className = data.response_type === 'TIP' ? 'bubble-tip' : 'bubble-answer';
-                    item.innerHTML = shortText;
+
+                    const header = document.createElement('div');
+                    header.className = 'tip-header';
+
+                    const shortText = data.response_type === 'TIP' ? `<b>${data.payload.short}</b>` : `<b>Q: ${data.payload.question}</b>`;
+                    const shortTextSpan = document.createElement('span');
+                    shortTextSpan.innerHTML = shortText;
+
+                    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    icon.setAttribute('class', 'toggle-icon');
+                    icon.setAttribute('fill', 'none');
+                    icon.setAttribute('viewBox', '0 0 24 24');
+                    icon.setAttribute('stroke-width', '1.5');
+                    icon.setAttribute('stroke', 'currentColor');
+                    icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />';
+
+                    header.appendChild(shortTextSpan);
+                    header.appendChild(icon);
+                    item.appendChild(header);
 
                     const longVersionDiv = document.createElement('div');
                     longVersionDiv.className = 'long-version hidden';
-                    longVersionDiv.innerHTML = marked.parse(longText);
+                    longVersionDiv.innerHTML = marked.parse(data.payload.long);
                     item.appendChild(longVersionDiv);
                     
                     item.addEventListener('click', () => {
                         longVersionDiv.classList.toggle('hidden');
+                        icon.classList.toggle('rotated');
                     });
 
                     tipsList.prepend(item);
