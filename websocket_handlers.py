@@ -1,11 +1,12 @@
 import asyncio
 import websockets
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect, Query
 import google.genai as genai
 
 from config import logger
 from gemini_utils import SYSTEM_PROMPT, send_to_gemini
 from speech_utils import transcription_manager
+from auth import verify_token
 
 async def audio_receiver(ws: WebSocket, queue: asyncio.Queue):
     try:
@@ -18,9 +19,18 @@ async def audio_receiver(ws: WebSocket, queue: asyncio.Queue):
         logger.error(f"Error in audio_receiver: {e}")
         await queue.put(None)
 
-async def websocket_transcribe_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    logger.info("WebSocket connection established.")
+async def websocket_transcribe_endpoint(websocket: WebSocket, token: str = Query(None)):
+    if not token:
+        await websocket.close(code=4001, reason="Missing auth token")
+        return
+    try:
+        await verify_token(token)
+        await websocket.accept()
+        logger.info("WebSocket connection established.")
+    except Exception as e:
+        logger.error(f"Authentication failed: {e}")
+        await websocket.close(code=4001, reason="Authentication failed")
+        return
 
     try:
         client = genai.Client()
@@ -49,9 +59,18 @@ async def websocket_transcribe_endpoint(websocket: WebSocket):
         if not websocket.client_state == websockets.protocol.State.CLOSED:
             await websocket.close()
 
-async def websocket_test_text_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    logger.info("Test WebSocket connection established.")
+async def websocket_test_text_endpoint(websocket: WebSocket, token: str = Query(None)):
+    if not token:
+        await websocket.close(code=4001, reason="Missing auth token")
+        return
+    try:
+        await verify_token(token)
+        await websocket.accept()
+        logger.info("Test WebSocket connection established.")
+    except Exception as e:
+        logger.error(f"Authentication failed: {e}")
+        await websocket.close(code=4001, reason="Authentication failed")
+        return
 
     try:
         client = genai.Client()

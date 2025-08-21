@@ -216,9 +216,16 @@
     <main class="container" style="padding-bottom: 5rem;">
         <header>
             <h1>CE Assistant</h1>
-            <div class="buttons">
-                <button id="recordTabButton">Record from Tab</button>
-                <button id="toggleTranscriptButton">Show Transcript</button>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="buttons">
+                    <button id="recordTabButton">Record from Tab</button>
+                    <button id="toggleTranscriptButton">Show Transcript</button>
+                </div>
+                <div>
+                    <span id="user-email" style="font-weight: 500;"></span>
+                    <button id="logoutButton" style="margin-left: 1rem; background-color: #ef4444;
+">Logout</button>
+                </div>
             </div>
         </header>
 
@@ -270,7 +277,42 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAwoAnyfOvw2F2t0WfgQ0HGRIkdzcztqlA",
+            authDomain: "mineral-concord-394714.firebaseapp.com",
+            projectId: "mineral-concord-394714",
+            storageBucket: "mineral-concord-394714.appspot.com",
+            messagingSenderId: "1029284952383",
+            appId: "1:1029284952383:web:1a2b3c4d5e6f7g8h9i0j"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                // User is signed in.
+                document.getElementById('user-email').textContent = user.email;
+                user.getIdToken().then(token => {
+                    document.cookie = `token=${token};path=/`;
+                });
+            } else {
+                // No user is signed in.
+                window.location.href = '/login.html';
+            }
+        });
+
+        document.getElementById('logoutButton').addEventListener('click', () => {
+            auth.signOut().then(() => {
+                document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                window.location.href = '/login.html';
+            });
+        });
+
         const recordTabButton = document.getElementById('recordTabButton');
         const toggleTranscriptButton = document.getElementById('toggleTranscriptButton');
         const transcriptCard = document.getElementById('transcript-card');
@@ -320,6 +362,12 @@
             toggleTranscriptButton.textContent = isHidden ? 'Show Transcript' : 'Hide Transcript';
         });
 
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
         async function runUITest() {
             if (websocket && websocket.readyState === WebSocket.OPEN) {
                 alert("A connection is already open. Please refresh the page.");
@@ -328,7 +376,12 @@
             
             console.log("Starting UI test with mock data...");
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            websocket = new WebSocket(`${protocol}//${window.location.host}/ws/test_text`);
+            const token = getCookie('token');
+            if (!token) {
+                window.location.href = '/login.html';
+                return;
+            }
+            websocket = new WebSocket(`${protocol}//${window.location.host}/ws/test_text?token=${token}`);
 
             websocket.onopen = async () => {
                 console.log('Test WebSocket connection established.');
@@ -373,7 +426,12 @@
                 processor.connect(audioContext.destination);
 
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                websocket = new WebSocket(`${protocol}//${window.location.host}/ws/transcribe`);
+                const token = getCookie('token');
+                if (!token) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+                websocket = new WebSocket(`${protocol}//${window.location.host}/ws/transcribe?token=${token}`);
 
                 websocket.onopen = () => console.log('WebSocket connection established.');
                 websocket.onclose = () => {

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CE Assistant - Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        :root {
+            --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            --background-color: #f9fafb;
+            --card-background-color: #ffffff;
+            --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --text-color: #374151;
+            --heading-color: #111827;
+            --border-color: #e5e7eb;
+            --primary-color: #3b82f6;
+            --primary-hover-color: #2563eb;
+        }
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--background-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background-color: var(--card-background-color);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 2.5rem;
+            box-shadow: var(--card-shadow);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        h1 {
+            color: var(--heading-color);
+            font-weight: 600;
+            font-size: 1.875rem;
+            margin-bottom: 1.5rem;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%;
+            font-size: 1rem;
+        }
+        button:hover {
+            background-color: var(--primary-hover-color);
+        }
+        #error-message {
+            color: #ef4444;
+            margin-top: 1rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <div class="card">
+            <h1>CE Assistant</h1>
+            <button id="loginButton">Sign in with Google</button>
+            <p id="error-message"></p>
+        </div>
+    </main>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAwoAnyfOvw2F2t0WfgQ0HGRIkdzcztqlA",
+            authDomain: "mineral-concord-394714.firebaseapp.com",
+            projectId: "mineral-concord-394714",
+            storageBucket: "mineral-concord-394714.appspot.com",
+            messagingSenderId: "1029284952383",
+            appId: "1:1029284952383:web:1a2b3c4d5e6f7g8h9i0j"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        const loginButton = document.getElementById('loginButton');
+        const errorMessage = document.getElementById('error-message');
+
+        loginButton.addEventListener('click', () => {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            provider.setCustomParameters({
+                'hd': 'google.com'
+            });
+
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    result.user.getIdToken().then((token) => {
+                        document.cookie = `token=${token};path=/`;
+                        window.location.href = '/';
+                    });
+                }).catch((error) => {
+                    // Handle Errors here.
+                    const errorCode = error.code;
+                    const errorMessageText = error.message;
+                    // The email of the user's account used.
+                    const email = error.email;
+                    // The firebase.auth.AuthCredential type that was used.
+                    const credential = error.credential;
+                    errorMessage.textContent = `Error: ${errorMessageText}`;
+                    errorMessage.style.display = 'block';
+                });
+        });
+    </script>
+</body>
+</html>
