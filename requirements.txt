@@ -7,3 +7,4 @@ python-dotenv
 google-genai
 requests
 pytest
+firebase_admin
