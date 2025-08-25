@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CE Assistant</title>
+    <title>CE Assist</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -231,21 +231,45 @@
             border-top: 1px solid var(--border-color);
             font-size: 0.8rem;
         }
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem; /* 12px */
+        }
+        .logo-img {
+            width: 8rem; /* 80px */
+            height: 8rem; /* 80px */
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        .buttons {
+            margin-bottom: 0; /* Override default margin */
+        }
     </style>
 </head>
 <body>
     <main class="container" style="padding-bottom: 5rem;">
         <header>
-            <h1>CE Assistant</h1>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="logo-container">
+                <img src="/logo.png" alt="CE Assist Logo" class="logo-img">
+            </div>
+            <div class="header-right">
                 <div class="buttons">
                     <button id="recordTabButton">Record from Tab</button>
                     <button id="toggleTranscriptButton">Show Transcript</button>
                 </div>
                 <div>
                     <span id="user-email" style="font-weight: 500;"></span>
-                    <button id="logoutButton" style="margin-left: 1rem; background-color: #ef4444;
-">Logout</button>
+                    <button id="logoutButton" style="margin-left: 1rem; background-color: #ef4444;">Logout</button>
                 </div>
             </div>
         </header>
