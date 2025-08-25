@@ -264,8 +264,8 @@
             </div>
             <div class="header-right">
                 <div class="buttons">
-                    <button id="recordTabButton">Record from Tab</button>
-                    <button id="toggleTranscriptButton">Show Transcript</button>
+                    <button id="recordTabButton">Connect to Meet</button>
+                    <button id="toggleTranscriptButton" class="hidden">Show Transcript</button>
                 </div>
                 <div>
                     <span id="user-email" style="font-weight: 500;"></span>
@@ -279,7 +279,7 @@
                 <div id="how-to-use-card" class="card">
                     <h3>How to Use</h3>
                     <ol>
-                        <li>Click the Record from Tab button above.</li>
+                        <li>Click the Connect to Meet button above.</li>
                         <li>In the pop-up, select the browser tab with your Google Meet call. Make sure to enable tab audio sharing.</li>
                         <li>Enable Gemini transcription in Google Meet. This informs the customer that the call is being transcribed.</li>
                         <li>Switch back to this CE Assistant tab to see the live analysis.</li>
@@ -533,6 +533,14 @@
                 document.getElementById('how-to-use-card').classList.add('hidden');
                 document.getElementById('key-facts-card').classList.remove('hidden');
                 document.getElementById('tips-card').classList.remove('hidden');
+                toggleTranscriptButton.classList.remove('hidden');
+
+                // Add initial tip bubble
+                const initialTip = document.createElement('li');
+                initialTip.className = 'bubble-tip';
+                initialTip.textContent = 'Tips will appear here when available';
+                tipsList.appendChild(initialTip);
+
                 stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
                 recordTabButton.textContent = 'Stop Recording';
                 isRecording = true;
@@ -583,6 +591,7 @@
             document.getElementById('how-to-use-card').classList.remove('hidden');
             document.getElementById('key-facts-card').classList.add('hidden');
             document.getElementById('tips-card').classList.add('hidden');
+            toggleTranscriptButton.classList.add('hidden');
 
             isRecording = false;
             recordTabButton.textContent = 'Record from Tab';

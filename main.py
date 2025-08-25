@@ -56,10 +56,7 @@ app.add_api_websocket_route("/ws/test_text", websocket_test_text_endpoint)
 
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
 
-@app.get("/login.html", response_class=HTMLResponse)
-async def login_page():
-    with open("login.html") as f:
-        return HTMLResponse(content=f.read())
+
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
