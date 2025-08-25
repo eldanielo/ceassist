@@ -102,6 +102,20 @@
             font-size: 0.875rem;
             line-height: 1.5;
         }
+        @keyframes blink {
+            0% {
+                opacity: .2;
+            }
+            20% {
+                opacity: 1;
+            }
+            100% {
+                opacity: .2;
+            }
+        }
+        #listening-bubble.visible {
+            display: block;
+        }
         #transcript p {
             background-color: var(--bubble-transcript-bg);
             padding: 0.75rem 1rem;
@@ -149,6 +163,9 @@
             font-size: 0.8125rem;
             font-weight: 500;
             list-style-type: none;
+        }
+        #tips-card {
+            position: relative;
         }
         #tips-list {
             list-style: none;
@@ -535,10 +552,11 @@
                 document.getElementById('tips-card').classList.remove('hidden');
                 toggleTranscriptButton.classList.remove('hidden');
 
-                // Add initial tip bubble
-                const initialTip = document.createElement('li');
-                initialTip.className = 'bubble-tip';
-                initialTip.textContent = 'Tips will appear here when available';
+                // Add initial tip message
+                const initialTip = document.createElement('p');
+                initialTip.id = 'initial-tip-message';
+                initialTip.style.textAlign = 'center';
+                initialTip.textContent = 'Connected! Tips will appear here when available.';
                 tipsList.appendChild(initialTip);
 
                 stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
@@ -592,14 +610,16 @@
             document.getElementById('key-facts-card').classList.add('hidden');
             document.getElementById('tips-card').classList.add('hidden');
             toggleTranscriptButton.classList.add('hidden');
+            tipsList.innerHTML = '';
 
             isRecording = false;
-            recordTabButton.textContent = 'Record from Tab';
+            recordTabButton.textContent = 'Connect to Meet';
             recordTabButton.disabled = false;
         }
 
         function handleWebSocketMessage(message) {
             const data = JSON.parse(message);
+
             switch (data.response_type) {
                 case 'RESTART':
                     console.log("Received RESTART message. Restarting recording...");
@@ -627,6 +647,10 @@
                     }
                     break;
                 case 'FACT':
+                    const initialTipMessageFact = document.getElementById('initial-tip-message');
+                    if (initialTipMessageFact) {
+                        initialTipMessageFact.remove();
+                    }
                     const factItem = document.createElement('li');
                     let gcpServiceHTML = '';
                     if (data.payload.gcp_service) {
@@ -656,6 +680,10 @@
                     break;
                 case 'TIP':
                 case 'ANSWER':
+                    const initialTipMessage = document.getElementById('initial-tip-message');
+                    if (initialTipMessage) {
+                        initialTipMessage.remove();
+                    }
                     const item = document.createElement('li');
                     item.className = data.response_type === 'TIP' ? 'bubble-tip' : 'bubble-answer';
 
