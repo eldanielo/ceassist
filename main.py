@@ -11,7 +11,7 @@ app = FastAPI()
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if request.url.path in ["/login.html", "/docs", "/openapi.json", "/firebase-config", "/replay"] or request.url.path.startswith("/ws"):
+        if request.url.path in ["/login.html", "/logo.png", "/docs", "/openapi.json", "/firebase-config", "/replay"] or request.url.path.startswith("/ws"):
             return await call_next(request)
 
         token = request.cookies.get("token")
